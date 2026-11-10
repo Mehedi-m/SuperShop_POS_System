@@ -1,10 +1,16 @@
 
 import bcrypt from "bcryptjs";
 import mongoose from "mongoose";
+import Session from "../models/session.model.js";
 
 import User from "../models/user.model.js";
 import Business from "../models/business.model.js";
 import { env } from "../config/env.js";
+import {
+  generateAccessToken,
+  generateRefreshToken,
+  hashToken,
+} from "../utils/token.js";
 
 // Reusable error helper
 const createError = (message, statusCode) => {
@@ -190,10 +196,74 @@ const rejectUser = async (userId) => {
   return sanitizeUser(user);
 };
 
+const loginUser = async (data, metadata = {}) => {
+  const { phone, password } = data;
+
+  const user = await User.findOne({ phone }).select("+password");
+
+  if (!user) {
+    throw createError("Invalid phone number or password", 401);
+  }
+
+  const isPasswordValid = await bcrypt.compare(
+    password,
+    user.password
+  );
+
+  if (!isPasswordValid) {
+    throw createError("Invalid phone number or password", 401);
+  }
+
+  if (user.accountStatus === "pending") {
+    throw createError("Your account is waiting for admin approval", 403);
+  }
+
+  if (user.accountStatus === "rejected") {
+    throw createError("Your registration has been rejected", 403);
+  }
+
+  if (!user.isActive) {
+    throw createError("Your account is inactive", 403);
+  }
+
+  // Create session
+  const session = await Session.create({
+    user: user._id,
+    refreshTokenHash: "temporary",
+    expiresAt: new Date(
+      Date.now() + 7 * 24 * 60 * 60 * 1000
+    ),
+    userAgent: metadata.userAgent || null,
+    ipAddress: metadata.ipAddress || null,
+  });
+
+  // Generate tokens
+  const accessToken = generateAccessToken(user, session._id);
+
+  const refreshToken = generateRefreshToken(user, session._id);
+
+  // Store hashed refresh token
+  session.refreshTokenHash = hashToken(refreshToken);
+
+  await session.save();
+
+  // Update last login
+  user.lastLoginAt = new Date();
+
+  await user.save();
+
+  return {
+    user: sanitizeUser(user),
+    accessToken,
+    refreshToken,
+  };
+};
+
 export {
   initialSetup,
   registerUser,
   getPendingUsers,
   approveUser,
   rejectUser,
+  loginUser,
 };
