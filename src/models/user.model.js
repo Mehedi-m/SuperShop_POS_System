@@ -9,17 +9,23 @@ const userSchema = new mongoose.Schema(
       trim: true,
     },
 
+    phone: {
+      type: String,
+      required: [true, "Phone number is required"],
+      unique: true,
+      trim: true,
+    },
+
     email: {
       type: String,
-      required: [true, "Email is required"],
-      unique: true,
       lowercase: true,
       trim: true,
+      default: null,
     },
 
     password: {
       type: String,
-      required: true,
+      required: [true, "Password is required"],
       select: false,
     },
 
@@ -31,14 +37,13 @@ const userSchema = new mongoose.Schema(
         "inventory_manager",
         "cashier",
       ],
-      default: "cashier",
+      default: null,
     },
 
-    tenantId: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "Business",
-      required: true,
-      index: true,
+    accountStatus: {
+      type: String,
+      enum: ["pending", "approved", "rejected"],
+      default: "pending",
     },
 
     isActive: {
@@ -46,9 +51,15 @@ const userSchema = new mongoose.Schema(
       default: true,
     },
 
-    isEmailVerified: {
-      type: Boolean,
-      default: false,
+    approvedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      default: null,
+    },
+
+    approvedAt: {
+      type: Date,
+      default: null,
     },
 
     lastLoginAt: {
