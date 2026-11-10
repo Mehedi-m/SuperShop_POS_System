@@ -7,11 +7,13 @@ import {
   pendingUsers,
   approve,
   reject,
+  login,
 } from "../controllers/auth.controller.js";
 
 import {
   initialSetupSchema,
   registerSchema,
+  loginSchema,
 } from "../validations/auth.validation.js";
 
 import validate from "../middlewares/validate.middleware.js";
@@ -33,6 +35,12 @@ router.post(
   "/register",
   validate(registerSchema),
   asyncHandler(register)
+);
+
+router.post(
+  "/login",
+  validate(loginSchema),
+  asyncHandler(login)
 );
 
 // Admin Protected Routes

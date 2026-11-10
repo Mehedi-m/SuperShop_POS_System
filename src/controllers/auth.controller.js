@@ -5,6 +5,7 @@ import {
   getPendingUsers,
   approveUser,
   rejectUser,
+  loginUser,
 } from "../services/auth.service.js";
 
 // 1. Initial Business Setup
@@ -65,5 +66,22 @@ export const reject = async (req, res) => {
     success: true,
     message: "User registration rejected successfully",
     data: user,
+  });
+};
+
+// 6. User Login
+export const login = async (req, res) => {
+  const result = await loginUser(req.body, {
+    userAgent: req.get("user-agent"),
+    ipAddress: req.ip,
+  });
+
+  const { refreshToken, ...responseData } = result;
+
+  return res.status(200).json({
+    success: true,
+    message: "Login successful",
+    data: responseData,
+    refreshToken,
   });
 };
