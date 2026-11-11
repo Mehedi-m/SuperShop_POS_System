@@ -39,6 +39,17 @@ const userSchema = new mongoose.Schema(
       ],
       default: null,
     },
+    assignedBranch: {
+  type: mongoose.Schema.Types.ObjectId,
+  ref: "Branch",
+  default: null,
+},
+
+assignedCounter: {
+  type: mongoose.Schema.Types.ObjectId,
+  ref: "Counter",
+  default: null,
+},
 
     accountStatus: {
       type: String,
@@ -69,6 +80,28 @@ const userSchema = new mongoose.Schema(
   },
   {
     timestamps: true,
+  }
+);
+
+userSchema.index(
+  { assignedBranch: 1 },
+  {
+    unique: true,
+    partialFilterExpression: {
+      role: "manager",
+      assignedBranch: { $type: "objectId" },
+    },
+  }
+);
+
+userSchema.index(
+  { assignedCounter: 1 },
+  {
+    unique: true,
+    partialFilterExpression: {
+      role: "cashier",
+      assignedCounter: { $type: "objectId" },
+    },
   }
 );
 

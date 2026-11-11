@@ -8,6 +8,8 @@ import {
   loginUser,
 } from "../services/auth.service.js";
 
+import { refreshCookieOptions } from "../utils/cookie.js";
+
 // 1. Initial Business Setup
 export const setupBusiness = async (req, res) => {
   const result = await initialSetup(req.body);
@@ -43,11 +45,11 @@ export const pendingUsers = async (req, res) => {
 
 // 4. Approve User
 export const approve = async (req, res) => {
-  const { role } = req.body;
+  const { role, branchId } = req.body;
 
   const user = await approveUser(
     req.params.userId,
-    role,
+    { role, branchId },
     req.user._id
   );
 
@@ -69,7 +71,7 @@ export const reject = async (req, res) => {
   });
 };
 
-// 6. User Login
+// User Login
 export const login = async (req, res) => {
   const result = await loginUser(req.body, {
     userAgent: req.get("user-agent"),
@@ -78,10 +80,18 @@ export const login = async (req, res) => {
 
   const { refreshToken, ...responseData } = result;
 
+  res.cookie(
+    "refreshToken",
+    refreshToken,
+    refreshCookieOptions
+  );
+
   return res.status(200).json({
     success: true,
     message: "Login successful",
-    data: responseData,
-    refreshToken,
+    data: {
+      user: responseData.user,
+      accessToken: responseData.accessToken,
+    },
   });
 };

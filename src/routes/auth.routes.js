@@ -14,6 +14,7 @@ import {
   initialSetupSchema,
   registerSchema,
   loginSchema,
+  approveUserSchema,
 } from "../validations/auth.validation.js";
 
 import validate from "../middlewares/validate.middleware.js";
@@ -64,6 +65,14 @@ router.patch(
   authenticate,
   authorizeRoles("admin"),
   asyncHandler(reject)
+);
+
+router.patch(
+  "/approve/:userId",
+  authenticate,
+  authorizeRoles("admin"),
+  validate(approveUserSchema),
+  asyncHandler(approve)
 );
 
 export default router;

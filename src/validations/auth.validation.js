@@ -99,3 +99,58 @@ export const loginSchema = z.object({
       .min(1, "Password is required"),
   }),
 });
+
+// Approve User Validation
+export const approveUserSchema = z.object({
+  body: z
+    .object({
+      role: z.enum([
+        "admin",
+        "manager",
+        "inventory_manager",
+        "cashier",
+      ]),
+
+      branchId: z
+        .string()
+        .regex(/^[0-9a-fA-F]{24}$/, "Invalid branch ID")
+        .optional(),
+
+      counterId: z
+        .string()
+        .regex(/^[0-9a-fA-F]{24}$/, "Invalid counter ID")
+        .optional(),
+    })
+    .refine(
+      (data) =>
+        data.role !== "manager" || Boolean(data.branchId),
+      {
+        message: "Branch ID is required for a manager",
+        path: ["branchId"],
+      }
+    )
+    .refine(
+      (data) =>
+        data.role !== "cashier" || Boolean(data.counterId),
+      {
+        message: "Counter ID is required for a cashier",
+        path: ["counterId"],
+      }
+    )
+    .refine(
+      (data) =>
+        data.role === "manager" || !data.branchId,
+      {
+        message: "Branch ID is only allowed for a manager",
+        path: ["branchId"],
+      }
+    )
+    .refine(
+      (data) =>
+        data.role === "cashier" || !data.counterId,
+      {
+        message: "Counter ID is only allowed for a cashier",
+        path: ["counterId"],
+      }
+    ),
+});

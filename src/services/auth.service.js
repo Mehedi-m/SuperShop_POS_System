@@ -2,7 +2,7 @@
 import bcrypt from "bcryptjs";
 import mongoose from "mongoose";
 import Session from "../models/session.model.js";
-
+import Branch from "../models/branch.model.js";
 import User from "../models/user.model.js";
 import Business from "../models/business.model.js";
 import { env } from "../config/env.js";
@@ -156,25 +156,114 @@ const getPendingUsers = async () => {
 };
 
 // 4. Approve User and Assign Role
-const approveUser = async (userId, role, adminId) => {
-  const user = await User.findById(userId);
-
-  if (!user) {
-    throw createError("User not found", 404);
+const approveUser = async (userId, { role, branchId }, adminId) => {
+  if (!mongoose.isValidObjectId(userId)) {
+    throw createError("Invalid user ID", 400);
   }
 
-  if (user.accountStatus !== "pending") {
-    throw createError("This account is not pending approval", 400);
+  // Non-manager approval
+  if (role !== "manager") {
+    const user = await User.findById(userId);
+
+    if (!user) {
+      throw createError("User not found", 404);
+    }
+
+    if (user.accountStatus !== "pending") {
+      throw createError("User is not pending approval", 400);
+    }
+
+    user.role = role;
+    user.accountStatus = "approved";
+    user.approvedBy = adminId;
+    user.approvedAt = new Date();
+    user.assignedBranch = null;
+
+    await user.save();
+
+    return sanitizeUser(user);
   }
 
-  user.role = role;
-  user.accountStatus = "approved";
-  user.approvedBy = adminId;
-  user.approvedAt = new Date();
+  // Manager approval requires a branch
+  if (!branchId || !mongoose.isValidObjectId(branchId)) {
+    throw createError("A valid branch ID is required", 400);
+  }
 
-  await user.save();
+  const session = await mongoose.startSession();
 
-  return sanitizeUser(user);
+  let approvedUser;
+
+  try {
+    await session.withTransaction(async () => {
+      const user = await User.findById(userId).session(session);
+
+      if (!user) {
+        throw createError("User not found", 404);
+      }
+
+      if (user.accountStatus !== "pending") {
+        throw createError("User is not pending approval", 400);
+      }
+
+      const branch = await Branch.findById(branchId).session(session);
+
+      if (!branch) {
+        throw createError("Branch not found", 404);
+      }
+
+      if (!branch.isActive) {
+        throw createError("This branch is inactive", 400);
+      }
+
+      if (branch.manager) {
+        throw createError(
+          "This branch already has a manager",
+          409
+        );
+      }
+
+      // Check whether another manager is already assigned
+      const existingManager = await User.findOne({
+        role: "manager",
+        assignedBranch: branch._id,
+      }).session(session);
+
+      if (existingManager) {
+        throw createError(
+          "This branch is already assigned to another manager",
+          409
+        );
+      }
+
+      // Assign branch to manager
+      user.role = "manager";
+      user.accountStatus = "approved";
+      user.approvedBy = adminId;
+      user.approvedAt = new Date();
+      user.assignedBranch = branch._id;
+
+      // Assign manager to branch
+      branch.manager = user._id;
+
+      await user.save({ session });
+      await branch.save({ session });
+
+      approvedUser = user;
+    });
+
+    return sanitizeUser(approvedUser);
+  } catch (error) {
+    if (error.code === 11000) {
+      throw createError(
+        "This manager or branch is already assigned",
+        409
+      );
+    }
+
+    throw error;
+  } finally {
+    await session.endSession();
+  }
 };
 
 // 5. Reject User
