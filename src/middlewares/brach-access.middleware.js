@@ -1,51 +1,68 @@
 import mongoose from "mongoose";
 import Counter from "../models/counter.model.js";
+import Branch from "../models/branch.model.js";
 
-const authorizeCounterAccess = (req, res, next) => {
+const authorizeBranchAccess = (req, res, next) => {
   const checkAccess = async () => {
-    const counterId =
-      req.params.counterId ||
-      req.body.counterId ||
-      req.query.counterId;
+    const branchId =
+      req.params.branchId ||
+      req.body.branchId ||
+      req.query.branchId;
 
-    if (!counterId || !mongoose.isValidObjectId(counterId)) {
+    if (!branchId || !mongoose.isValidObjectId(branchId)) {
       return res.status(400).json({
         success: false,
-        message: "A valid counter ID is required",
+        message: "A valid branch ID is required",
       });
     }
 
-    const counter = await Counter.findById(counterId);
+    const branch = await Branch.findById(branchId);
 
-    if (!counter || !counter.isActive) {
+    if (!branch || !branch.isActive) {
       return res.status(404).json({
         success: false,
-        message: "Counter not found or inactive",
+        message: "Branch not found or inactive",
       });
     }
 
     const { role, assignedBranch, assignedCounter } = req.user;
 
+    // Admin and Inventory Manager can access all branches
     if (role === "admin" || role === "inventory_manager") {
       return next();
     }
 
+    // Manager can access only assigned branch
     if (role === "manager") {
-      if (assignedBranch?.toString() !== counter.branch.toString()) {
+      if (assignedBranch?.toString() !== branchId) {
         return res.status(403).json({
           success: false,
-          message: "You cannot access this counter",
+          message: "You cannot access this branch",
         });
       }
 
       return next();
     }
 
+    // Cashier can access only the branch of their assigned counter
     if (role === "cashier") {
-      if (assignedCounter?.toString() !== counter._id.toString()) {
+      if (!assignedCounter) {
         return res.status(403).json({
           success: false,
-          message: "You can only access your assigned counter",
+          message: "No counter is assigned to your account",
+        });
+      }
+
+      const counter = await Counter.findById(assignedCounter);
+
+      if (
+        !counter ||
+        !counter.isActive ||
+        counter.branch.toString() !== branchId
+      ) {
+        return res.status(403).json({
+          success: false,
+          message: "You cannot access this branch",
         });
       }
 
@@ -54,11 +71,11 @@ const authorizeCounterAccess = (req, res, next) => {
 
     return res.status(403).json({
       success: false,
-      message: "Counter access denied",
+      message: "Branch access denied",
     });
   };
 
   checkAccess().catch(next);
 };
 
-export default authorizeCounterAccess;
+export default authorizeBranchAccess;

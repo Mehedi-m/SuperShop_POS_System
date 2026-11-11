@@ -1,11 +1,15 @@
 
 import bcrypt from "bcryptjs";
 import mongoose from "mongoose";
-import Session from "../models/session.model.js";
-import Branch from "../models/branch.model.js";
+
 import User from "../models/user.model.js";
 import Business from "../models/business.model.js";
+import Session from "../models/session.model.js";
+import Branch from "../models/branch.model.js";
+import Counter from "../models/counter.model.js";
+
 import { env } from "../config/env.js";
+
 import {
   generateAccessToken,
   generateRefreshToken,
@@ -40,23 +44,26 @@ const initialSetup = async (data) => {
     password,
   } = data;
 
-  // Check whether initial setup has already been completed
   const existingBusiness = await Business.findOne({
     instanceKey: "primary",
   });
 
   if (existingBusiness) {
-    throw createError("Business setup has already been completed", 409);
+    throw createError(
+      "Business setup has already been completed",
+      409
+    );
   }
 
-  // Check duplicate admin phone
   const existingUser = await User.findOne({ phone });
 
   if (existingUser) {
-    throw createError("This phone number is already registered", 409);
+    throw createError(
+      "This phone number is already registered",
+      409
+    );
   }
 
-  // Hash password
   const hashedPassword = await bcrypt.hash(
     password,
     env.BCRYPT_SALT_ROUNDS
@@ -69,7 +76,6 @@ const initialSetup = async (data) => {
 
   try {
     await session.withTransaction(async () => {
-      // Create Business
       createdBusiness = new Business({
         instanceKey: "primary",
         name: businessName,
@@ -80,7 +86,6 @@ const initialSetup = async (data) => {
 
       await createdBusiness.save({ session });
 
-      // Create First Admin
       createdUser = new User({
         name,
         phone,
@@ -117,26 +122,40 @@ const initialSetup = async (data) => {
 const registerUser = async (data) => {
   const { name, phone, email, password } = data;
 
-  // Check duplicate phone
+  // Ensure initial business setup is completed
+  const existingBusiness = await Business.findOne({
+    instanceKey: "primary",
+  });
+
+  if (!existingBusiness) {
+    throw createError(
+      "Business setup has not been completed",
+      400
+    );
+  }
+
   const existingUser = await User.findOne({ phone });
 
   if (existingUser) {
-    throw createError("This phone number is already registered", 409);
+    throw createError(
+      "This phone number is already registered",
+      409
+    );
   }
 
-  // Hash password
   const hashedPassword = await bcrypt.hash(
     password,
     env.BCRYPT_SALT_ROUNDS
   );
 
-  // Create pending user
   const user = await User.create({
     name,
     phone,
     email,
     password: hashedPassword,
     role: null,
+    assignedBranch: null,
+    assignedCounter: null,
     accountStatus: "pending",
     isActive: true,
   });
@@ -156,13 +175,17 @@ const getPendingUsers = async () => {
 };
 
 // 4. Approve User and Assign Role
-const approveUser = async (userId, { role, branchId }, adminId) => {
+const approveUser = async (
+  userId,
+  { role, branchId, counterId },
+  adminId
+) => {
   if (!mongoose.isValidObjectId(userId)) {
     throw createError("Invalid user ID", 400);
   }
 
-  // Non-manager approval
-  if (role !== "manager") {
+  // Admin and Inventory Manager require no assignment
+  if (role === "admin" || role === "inventory_manager") {
     const user = await User.findById(userId);
 
     if (!user) {
@@ -170,28 +193,39 @@ const approveUser = async (userId, { role, branchId }, adminId) => {
     }
 
     if (user.accountStatus !== "pending") {
-      throw createError("User is not pending approval", 400);
+      throw createError(
+        "This user is not pending approval",
+        400
+      );
     }
 
     user.role = role;
+    user.assignedBranch = null;
+    user.assignedCounter = null;
     user.accountStatus = "approved";
     user.approvedBy = adminId;
     user.approvedAt = new Date();
-    user.assignedBranch = null;
 
     await user.save();
 
     return sanitizeUser(user);
   }
 
-  // Manager approval requires a branch
-  if (!branchId || !mongoose.isValidObjectId(branchId)) {
-    throw createError("A valid branch ID is required", 400);
+  // Determine assignment ID
+  const assignmentId =
+    role === "manager" ? branchId : counterId;
+
+  if (!mongoose.isValidObjectId(assignmentId)) {
+    throw createError(
+      "A valid assignment ID is required",
+      400
+    );
   }
 
+  // Manager and Cashier assignments use transactions
   const session = await mongoose.startSession();
 
-  let approvedUser;
+  let approvedUser = null;
 
   try {
     await session.withTransaction(async () => {
@@ -202,51 +236,127 @@ const approveUser = async (userId, { role, branchId }, adminId) => {
       }
 
       if (user.accountStatus !== "pending") {
-        throw createError("User is not pending approval", 400);
-      }
-
-      const branch = await Branch.findById(branchId).session(session);
-
-      if (!branch) {
-        throw createError("Branch not found", 404);
-      }
-
-      if (!branch.isActive) {
-        throw createError("This branch is inactive", 400);
-      }
-
-      if (branch.manager) {
         throw createError(
-          "This branch already has a manager",
+          "This user is not pending approval",
+          400
+        );
+      }
+
+      if (user.assignedBranch || user.assignedCounter) {
+        throw createError(
+          "This user already has an assignment",
           409
         );
       }
 
-      // Check whether another manager is already assigned
-      const existingManager = await User.findOne({
-        role: "manager",
-        assignedBranch: branch._id,
-      }).session(session);
+      // MANAGER APPROVAL
+      if (role === "manager") {
+        const branch = await Branch.findById(
+          assignmentId
+        ).session(session);
 
-      if (existingManager) {
-        throw createError(
-          "This branch is already assigned to another manager",
-          409
+        if (!branch) {
+          throw createError("Branch not found", 404);
+        }
+
+        if (!branch.isActive) {
+          throw createError(
+            "This branch is inactive",
+            400
+          );
+        }
+
+        // Atomically reserve the branch
+        const updatedBranch = await Branch.findOneAndUpdate(
+          {
+            _id: assignmentId,
+            isActive: true,
+            manager: null,
+          },
+          {
+            $set: { manager: user._id },
+          },
+          {
+            new: true,
+            session,
+          }
         );
+
+        if (!updatedBranch) {
+          throw createError(
+            "This branch already has a manager",
+            409
+          );
+        }
+
+        user.role = "manager";
+        user.assignedBranch = updatedBranch._id;
+        user.assignedCounter = null;
       }
 
-      // Assign branch to manager
-      user.role = "manager";
+      // CASHIER APPROVAL
+      if (role === "cashier") {
+        const counter = await Counter.findById(
+          assignmentId
+        ).session(session);
+
+        if (!counter) {
+          throw createError("Counter not found", 404);
+        }
+
+        if (!counter.isActive) {
+          throw createError(
+            "This counter is inactive",
+            400
+          );
+        }
+
+        // Check parent branch
+        const branch = await Branch.findById(
+          counter.branch
+        ).session(session);
+
+        if (!branch || !branch.isActive) {
+          throw createError(
+            "Counter's branch is unavailable or inactive",
+            400
+          );
+        }
+
+        // Atomically reserve the counter
+        const updatedCounter = await Counter.findOneAndUpdate(
+          {
+            _id: assignmentId,
+            isActive: true,
+            cashier: null,
+          },
+          {
+            $set: { cashier: user._id },
+          },
+          {
+            new: true,
+            session,
+          }
+        );
+
+        if (!updatedCounter) {
+          throw createError(
+            "This counter already has a cashier",
+            409
+          );
+        }
+
+        user.role = "cashier";
+        user.assignedCounter = updatedCounter._id;
+        user.assignedBranch = null;
+      }
+
+      // Common approval information
       user.accountStatus = "approved";
       user.approvedBy = adminId;
       user.approvedAt = new Date();
-      user.assignedBranch = branch._id;
-
-      // Assign manager to branch
-      branch.manager = user._id;
 
       await user.save({ session });
-      await branch.save({ session });
 
       approvedUser = user;
     });
@@ -255,7 +365,7 @@ const approveUser = async (userId, { role, branchId }, adminId) => {
   } catch (error) {
     if (error.code === 11000) {
       throw createError(
-        "This manager or branch is already assigned",
+        "This assignment already exists",
         409
       );
     }
@@ -268,6 +378,10 @@ const approveUser = async (userId, { role, branchId }, adminId) => {
 
 // 5. Reject User
 const rejectUser = async (userId) => {
+  if (!mongoose.isValidObjectId(userId)) {
+    throw createError("Invalid user ID", 400);
+  }
+
   const user = await User.findById(userId);
 
   if (!user) {
@@ -275,7 +389,10 @@ const rejectUser = async (userId) => {
   }
 
   if (user.accountStatus !== "pending") {
-    throw createError("This account is not pending approval", 400);
+    throw createError(
+      "This account is not pending approval",
+      400
+    );
   }
 
   user.accountStatus = "rejected";
@@ -285,13 +402,17 @@ const rejectUser = async (userId) => {
   return sanitizeUser(user);
 };
 
+// 6. Login User
 const loginUser = async (data, metadata = {}) => {
   const { phone, password } = data;
 
   const user = await User.findOne({ phone }).select("+password");
 
   if (!user) {
-    throw createError("Invalid phone number or password", 401);
+    throw createError(
+      "Invalid phone number or password",
+      401
+    );
   }
 
   const isPasswordValid = await bcrypt.compare(
@@ -300,19 +421,31 @@ const loginUser = async (data, metadata = {}) => {
   );
 
   if (!isPasswordValid) {
-    throw createError("Invalid phone number or password", 401);
+    throw createError(
+      "Invalid phone number or password",
+      401
+    );
   }
 
   if (user.accountStatus === "pending") {
-    throw createError("Your account is waiting for admin approval", 403);
+    throw createError(
+      "Your account is waiting for admin approval",
+      403
+    );
   }
 
   if (user.accountStatus === "rejected") {
-    throw createError("Your registration has been rejected", 403);
+    throw createError(
+      "Your registration has been rejected",
+      403
+    );
   }
 
   if (!user.isActive) {
-    throw createError("Your account is inactive", 403);
+    throw createError(
+      "Your account is inactive",
+      403
+    );
   }
 
   // Create session
@@ -327,9 +460,15 @@ const loginUser = async (data, metadata = {}) => {
   });
 
   // Generate tokens
-  const accessToken = generateAccessToken(user, session._id);
+  const accessToken = generateAccessToken(
+    user,
+    session._id
+  );
 
-  const refreshToken = generateRefreshToken(user, session._id);
+  const refreshToken = generateRefreshToken(
+    user,
+    session._id
+  );
 
   // Store hashed refresh token
   session.refreshTokenHash = hashToken(refreshToken);

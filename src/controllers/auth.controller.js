@@ -45,11 +45,11 @@ export const pendingUsers = async (req, res) => {
 
 // 4. Approve User
 export const approve = async (req, res) => {
-  const { role, branchId } = req.body;
+  const { role, branchId, counterId } = req.body;
 
   const user = await approveUser(
     req.params.userId,
-    { role, branchId },
+    { role, branchId, counterId },
     req.user._id
   );
 
