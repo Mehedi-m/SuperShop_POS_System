@@ -95,6 +95,17 @@ userSchema.index(
 );
 
 userSchema.index(
+  { assignedBranch: 1, role: 1 },
+  {
+    unique: true,
+    partialFilterExpression: {
+      role: { $in: ["manager", "inventory_manager"] },
+      assignedBranch: { $type: "objectId" },
+    },
+  }
+);
+
+userSchema.index(
   { assignedCounter: 1 },
   {
     unique: true,

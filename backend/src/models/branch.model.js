@@ -33,6 +33,12 @@ const branchSchema = new mongoose.Schema(
       ref: "User",
       default: null,
     },
+    
+    inventoryManager: {
+  type: mongoose.Schema.Types.ObjectId,
+  ref: "User",
+  default: null,
+},
 
     isActive: {
       type: Boolean,
