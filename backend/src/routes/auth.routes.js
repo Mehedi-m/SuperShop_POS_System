@@ -8,6 +8,7 @@ import {
   approve,
   reject,
   login,
+  refreshAccessToken,
 } from "../controllers/auth.controller.js";
 
 import {
@@ -44,6 +45,8 @@ router.post(
   asyncHandler(login)
 );
 
+router.post("/refresh", asyncHandler(refresh));
+
 // Admin Protected Routes
 
 router.get(
@@ -51,13 +54,6 @@ router.get(
   authenticate,
   authorizeRoles("admin"),
   asyncHandler(pendingUsers)
-);
-
-router.patch(
-  "/approve/:userId",
-  authenticate,
-  authorizeRoles("admin"),
-  asyncHandler(approve)
 );
 
 router.patch(

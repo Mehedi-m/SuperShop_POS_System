@@ -6,6 +6,7 @@ import {
   approveUser,
   rejectUser,
   loginUser,
+  refreshAccessToken,
 } from "../services/auth.service.js";
 
 import { refreshCookieOptions } from "../utils/cookie.js";
@@ -92,6 +93,28 @@ export const login = async (req, res) => {
     data: {
       user: responseData.user,
       accessToken: responseData.accessToken,
+    },
+  });
+};
+
+// Refresh Access Token
+export const refresh = async (req, res) => {
+  const result = await refreshAccessToken(
+    req.cookies?.refreshToken
+  );
+
+  res.cookie(
+    "refreshToken",
+    result.refreshToken,
+    refreshCookieOptions
+  );
+
+  return res.status(200).json({
+    success: true,
+    message: "Access token refreshed successfully",
+    data: {
+      user: result.user,
+      accessToken: result.accessToken,
     },
   });
 };

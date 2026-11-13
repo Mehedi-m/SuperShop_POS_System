@@ -1,6 +1,7 @@
 
 import bcrypt from "bcryptjs";
 import mongoose from "mongoose";
+import jwt from "jsonwebtoken";
 
 import User from "../models/user.model.js";
 import Business from "../models/business.model.js";
@@ -448,6 +449,108 @@ const loginUser = async (data, metadata = {}) => {
     );
   }
 
+  // 7. Refresh Access Token
+const refreshAccessToken = async (refreshToken) => {
+  if (!refreshToken) {
+    throw createError("Refresh token is required", 401);
+  }
+
+  let decoded;
+
+  try {
+    decoded = jwt.verify(
+      refreshToken,
+      env.JWT_REFRESH_SECRET
+    );
+  } catch {
+    throw createError(
+      "Invalid or expired refresh token",
+      401
+    );
+  }
+
+  const { sub, sessionId } = decoded;
+
+  if (!sub || !sessionId) {
+    throw createError("Invalid refresh token", 401);
+  }
+
+  // Find valid session
+  const session = await Session.findOne({
+    _id: sessionId,
+    user: sub,
+    isRevoked: false,
+    expiresAt: { $gt: new Date() },
+    refreshTokenHash: hashToken(refreshToken),
+  });
+
+  if (!session) {
+    throw createError(
+      "Session expired or revoked",
+      401
+    );
+  }
+
+  // Check user status
+  const user = await User.findById(sub);
+
+  if (
+    !user ||
+    user.accountStatus !== "approved" ||
+    !user.isActive
+  ) {
+    throw createError(
+      "Account is not authorized",
+      403
+    );
+  }
+
+  // Rotate refresh token
+  const newRefreshToken = generateRefreshToken(
+    user,
+    session._id
+  );
+
+  const newAccessToken = generateAccessToken(
+    user,
+    session._id
+  );
+
+  // Atomic update prevents reuse of an old refresh token
+  const updatedSession = await Session.findOneAndUpdate(
+    {
+      _id: session._id,
+      refreshTokenHash: hashToken(refreshToken),
+      isRevoked: false,
+      expiresAt: { $gt: new Date() },
+    },
+    {
+      $set: {
+        refreshTokenHash: hashToken(newRefreshToken),
+      },
+    },
+    {
+      new: true,
+    }
+  );
+
+  if (!updatedSession) {
+    throw createError(
+      "Refresh token has already been used",
+      401
+    );
+  }
+
+  const userData = user.toObject();
+  delete userData.password;
+
+  return {
+    user: userData,
+    accessToken: newAccessToken,
+    refreshToken: newRefreshToken,
+  };
+};
+
   // Create session
   const session = await Session.create({
     user: user._id,
@@ -494,4 +597,5 @@ export {
   approveUser,
   rejectUser,
   loginUser,
+  refreshAccessToken,
 };
