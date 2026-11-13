@@ -551,6 +551,35 @@ const refreshAccessToken = async (refreshToken) => {
   };
 };
 
+
+// Logout User
+const logoutUser = async (sessionId) => {
+  const session = await Session.findOneAndUpdate(
+    {
+      _id: sessionId,
+      isRevoked: false,
+    },
+    {
+      $set: {
+        isRevoked: true,
+      },
+    },
+    {
+      new: true,
+    }
+  );
+
+  if (!session) {
+    throw createError(
+      "Session already revoked or not found",
+      401
+    );
+  }
+
+  return true;
+};
+
+
   // Create session
   const session = await Session.create({
     user: user._id,
@@ -598,4 +627,5 @@ export {
   rejectUser,
   loginUser,
   refreshAccessToken,
+  logoutUser,
 };

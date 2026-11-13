@@ -7,6 +7,7 @@ import {
   rejectUser,
   loginUser,
   refreshAccessToken,
+  logoutUser,
 } from "../services/auth.service.js";
 
 import { refreshCookieOptions } from "../utils/cookie.js";
@@ -118,3 +119,33 @@ export const refresh = async (req, res) => {
     },
   });
 };
+
+
+export const getMe = async (req, res) => {
+  return res.status(200).json({
+    success: true,
+    message: "User fetched successfully",
+    data: {
+      user: req.user,
+    },
+  });
+};
+
+
+export const logout = async (req, res) => {
+  await logoutUser(req.session._id);
+
+  // Clear refresh token cookie
+  res.clearCookie("refreshToken", {
+    httpOnly: true,
+    secure: refreshCookieOptions.secure,
+    sameSite: refreshCookieOptions.sameSite,
+    path: refreshCookieOptions.path,
+  });
+
+  return res.status(200).json({
+    success: true,
+    message: "Logout successful",
+  });
+};
+

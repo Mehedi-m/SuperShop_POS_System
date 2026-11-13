@@ -71,4 +71,16 @@ router.patch(
   asyncHandler(approve)
 );
 
+router.get(
+  "/me",
+  authenticate,
+  asyncHandler(getMe)
+);
+
+router.post(
+  "/logout",
+  authenticate,
+  asyncHandler(logout)
+);
+
 export default router;
