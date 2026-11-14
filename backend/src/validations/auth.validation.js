@@ -100,6 +100,7 @@ export const loginSchema = z.object({
   }),
 });
 
+
 // Approve User Validation
 export const approveUserSchema = z.object({
   body: z
@@ -123,9 +124,10 @@ export const approveUserSchema = z.object({
     })
     .refine(
       (data) =>
-        data.role !== "manager" || Boolean(data.branchId),
+        !["manager", "inventory_manager"].includes(data.role) ||
+        Boolean(data.branchId),
       {
-        message: "Branch ID is required for a manager",
+        message: "Branch ID is required for this role",
         path: ["branchId"],
       }
     )
@@ -139,9 +141,10 @@ export const approveUserSchema = z.object({
     )
     .refine(
       (data) =>
-        data.role === "manager" || !data.branchId,
+        ["manager", "inventory_manager"].includes(data.role) ||
+        !data.branchId,
       {
-        message: "Branch ID is only allowed for a manager",
+        message: "Branch ID is not allowed for this role",
         path: ["branchId"],
       }
     )

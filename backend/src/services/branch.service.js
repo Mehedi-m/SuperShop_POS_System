@@ -1,12 +1,12 @@
 
 import mongoose from "mongoose";
 import Branch from "../models/branch.model.js";
-import User from "../models/user.model.js";
 import Counter from "../models/counter.model.js";
 
 export const getAllBranches = async () => {
   return await Branch.find()
     .populate("manager", "name phone")
+    .populate("inventoryManager", "name phone")
     .sort({ createdAt: -1 });
 };
 
@@ -29,12 +29,10 @@ export const getBranchById = async (branchId) => {
   return branch;
 };
 
-export const getAccessibleBranches = async (userId) => {
-  const user = await User.findById(userId);
-
+export const getAccessibleBranches = async (user) => {
   if (!user) {
-    throw Object.assign(new Error("User not found"), {
-      statusCode: 404,
+    throw Object.assign(new Error("Authenticated user is required"), {
+      statusCode: 401,
     });
   }
 
@@ -114,6 +112,17 @@ export const updateBranch = async (branchId, updateData) => {
 
   if (updateData.code) {
     updateData.code = updateData.code.toUpperCase();
+
+    const duplicateCode = await Branch.findOne({
+      code: updateData.code,
+      _id: { $ne: branchId },
+    });
+
+    if (duplicateCode) {
+      throw Object.assign(new Error("Branch code already exists"), {
+        statusCode: 409,
+      });
+    }
   }
 
   const branch = await Branch.findByIdAndUpdate(

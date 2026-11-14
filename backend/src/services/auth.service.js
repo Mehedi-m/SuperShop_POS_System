@@ -175,6 +175,7 @@ const getPendingUsers = async () => {
 };
 
 // 4. Approve User and Assign Role
+// 4. Approve User and Assign Role
 const approveUser = async (
   userId,
   { role, branchId, counterId },
@@ -184,8 +185,8 @@ const approveUser = async (
     throw createError("Invalid user ID", 400);
   }
 
-  // Admin and Inventory Manager require no assignment
-  if (role === "admin" || role === "inventory_manager") {
+  // Admin does not need a branch or counter assignment.
+  if (role === "admin") {
     const user = await User.findById(userId);
 
     if (!user) {
@@ -199,7 +200,7 @@ const approveUser = async (
       );
     }
 
-    user.role = role;
+    user.role = "admin";
     user.assignedBranch = null;
     user.assignedCounter = null;
     user.accountStatus = "approved";
@@ -211,8 +212,14 @@ const approveUser = async (
     return sanitizeUser(user);
   }
 
-  const assignmentId =
-    role === "manager" ? branchId : counterId;
+  const isBranchRole = [
+    "manager",
+    "inventory_manager",
+  ].includes(role);
+
+  const assignmentId = isBranchRole
+    ? branchId
+    : counterId;
 
   if (!mongoose.isValidObjectId(assignmentId)) {
     throw createError(
@@ -227,7 +234,9 @@ const approveUser = async (
 
   try {
     await session.withTransaction(async () => {
-      const user = await User.findById(userId).session(session);
+      const user = await User.findById(userId).session(
+        session
+      );
 
       if (!user) {
         throw createError("User not found", 404);
@@ -247,8 +256,8 @@ const approveUser = async (
         );
       }
 
-      // MANAGER APPROVAL
-      if (role === "manager") {
+      // MANAGER / INVENTORY MANAGER
+      if (isBranchRole) {
         const branch = await Branch.findById(
           assignmentId
         ).session(session);
@@ -264,14 +273,19 @@ const approveUser = async (
           );
         }
 
+        const assignmentField =
+          role === "manager" ? "manager" : "inventoryManager";
+
         const updatedBranch = await Branch.findOneAndUpdate(
           {
             _id: assignmentId,
             isActive: true,
-            manager: null,
+            [assignmentField]: null,
           },
           {
-            $set: { manager: user._id },
+            $set: {
+              [assignmentField]: user._id,
+            },
           },
           {
             new: true,
@@ -281,17 +295,17 @@ const approveUser = async (
 
         if (!updatedBranch) {
           throw createError(
-            "This branch already has a manager",
+            `This branch already has a ${role.replace("_", " ")}`,
             409
           );
         }
 
-        user.role = "manager";
+        user.role = role;
         user.assignedBranch = updatedBranch._id;
         user.assignedCounter = null;
       }
 
-      // CASHIER APPROVAL
+      // CASHIER
       if (role === "cashier") {
         const counter = await Counter.findById(
           assignmentId
@@ -326,7 +340,9 @@ const approveUser = async (
             cashier: null,
           },
           {
-            $set: { cashier: user._id },
+            $set: {
+              cashier: user._id,
+            },
           },
           {
             new: true,

@@ -226,7 +226,11 @@ const Navbar = ({
                     type="button"
                     onClick={() => {
                       closeAllMenus();
-                      onCreateBranch?.();
+                      if (onCreateBranch) {
+                        onCreateBranch();
+                      } else {
+                        router.push("/branches?create=true");
+                      }
                     }}
                     className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-slate-600 transition hover:bg-emerald-50 hover:text-emerald-700"
                   >
