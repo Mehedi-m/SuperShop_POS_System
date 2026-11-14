@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 
@@ -21,7 +21,7 @@ import AuthLayout from "@/features/auth/components/auth-layout";
 import useAuth from "@/features/auth/hooks/use-auth";
 import { loginSchema } from "@/schemas/auth.schema";
 
-export default function LoginPage() {
+function LoginForm() {
   const router = useRouter();
 
   const { login, isAuthenticated, isInitialized } = useAuth();
@@ -238,5 +238,22 @@ const redirectTo =
         </Link>
       </p>
     </AuthLayout>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex min-h-screen items-center justify-center bg-white">
+          <Loader2
+            className="animate-spin text-emerald-600"
+            size={28}
+          />
+        </div>
+      }
+    >
+      <LoginForm />
+    </Suspense>
   );
 }
