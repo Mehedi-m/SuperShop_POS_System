@@ -6,6 +6,7 @@ import {
   createNewBranch,
   updateExistingBranch,
   changeBranchStatus,
+  getAccessibleBranches,
 } from "../controllers/branch.controller.js";
 
 import {
@@ -22,7 +23,13 @@ const router = Router();
 
 router.use(authenticate);
 
+router.get(
+  "/accessible",
+  asyncHandler(getAccessibleBranches)
+);
+
 // Admin only
+
 router.get(
   "/",
   authorizeRoles("admin"),

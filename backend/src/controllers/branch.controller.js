@@ -5,6 +5,7 @@ import {
   createBranch,
   updateBranch,
   toggleBranchStatus,
+  getAccessibleBranches as getAccessibleBranchesService,
 } from "../services/branch.service.js";
 
 export const getBranches = async (req, res) => {
@@ -57,3 +58,17 @@ export const changeBranchStatus = async (req, res) => {
     data: branch,
   });
 };
+
+export const getAccessibleBranches = async (req, res) => {
+  const branches = await getAccessibleBranchesService(req.user);
+
+  return res.status(200).json({
+    success: true,
+    message: "Accessible branches fetched successfully",
+    data: {
+      branches,
+    },
+  });
+};
+
+

@@ -39,7 +39,11 @@ const branchSchema = new mongoose.Schema(
   ref: "User",
   default: null,
 },
-
+    
+    isMain: {
+  type: Boolean,
+  default: false,
+},
     isActive: {
       type: Boolean,
       default: true,
@@ -47,6 +51,14 @@ const branchSchema = new mongoose.Schema(
   },
   {
     timestamps: true,
+  }
+);
+
+branchSchema.index(
+  { isMain: 1 },
+  {
+    unique: true,
+    partialFilterExpression: { isMain: true },
   }
 );
 

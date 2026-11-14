@@ -8,7 +8,9 @@ import {
   approve,
   reject,
   login,
-  refreshAccessToken,
+  refresh,
+  getMe,
+  logout,
 } from "../controllers/auth.controller.js";
 
 import {

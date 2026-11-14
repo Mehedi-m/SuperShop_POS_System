@@ -123,7 +123,6 @@ const initialSetup = async (data) => {
 const registerUser = async (data) => {
   const { name, phone, email, password } = data;
 
-  // Ensure initial business setup is completed
   const existingBusiness = await Business.findOne({
     instanceKey: "primary",
   });
@@ -212,7 +211,6 @@ const approveUser = async (
     return sanitizeUser(user);
   }
 
-  // Determine assignment ID
   const assignmentId =
     role === "manager" ? branchId : counterId;
 
@@ -223,7 +221,6 @@ const approveUser = async (
     );
   }
 
-  // Manager and Cashier assignments use transactions
   const session = await mongoose.startSession();
 
   let approvedUser = null;
@@ -267,7 +264,6 @@ const approveUser = async (
           );
         }
 
-        // Atomically reserve the branch
         const updatedBranch = await Branch.findOneAndUpdate(
           {
             _id: assignmentId,
@@ -312,7 +308,6 @@ const approveUser = async (
           );
         }
 
-        // Check parent branch
         const branch = await Branch.findById(
           counter.branch
         ).session(session);
@@ -324,7 +319,6 @@ const approveUser = async (
           );
         }
 
-        // Atomically reserve the counter
         const updatedCounter = await Counter.findOneAndUpdate(
           {
             _id: assignmentId,
@@ -352,7 +346,6 @@ const approveUser = async (
         user.assignedBranch = null;
       }
 
-      // Common approval information
       user.accountStatus = "approved";
       user.approvedBy = adminId;
       user.approvedAt = new Date();
@@ -449,7 +442,46 @@ const loginUser = async (data, metadata = {}) => {
     );
   }
 
-  // 7. Refresh Access Token
+  // Create session
+  const session = await Session.create({
+    user: user._id,
+    refreshTokenHash: "temporary",
+    expiresAt: new Date(
+      Date.now() + 7 * 24 * 60 * 60 * 1000
+    ),
+    userAgent: metadata.userAgent || null,
+    ipAddress: metadata.ipAddress || null,
+  });
+
+  // Generate tokens
+  const accessToken = generateAccessToken(
+    user,
+    session._id
+  );
+
+  const refreshToken = generateRefreshToken(
+    user,
+    session._id
+  );
+
+  // Store hashed refresh token
+  session.refreshTokenHash = hashToken(refreshToken);
+
+  await session.save();
+
+  // Update last login
+  user.lastLoginAt = new Date();
+
+  await user.save();
+
+  return {
+    user: sanitizeUser(user),
+    accessToken,
+    refreshToken,
+  };
+};
+
+// 7. Refresh Access Token
 const refreshAccessToken = async (refreshToken) => {
   if (!refreshToken) {
     throw createError("Refresh token is required", 401);
@@ -471,11 +503,15 @@ const refreshAccessToken = async (refreshToken) => {
 
   const { sub, sessionId } = decoded;
 
-  if (!sub || !sessionId) {
+  if (
+    !sub ||
+    !sessionId ||
+    !mongoose.isValidObjectId(sub) ||
+    !mongoose.isValidObjectId(sessionId)
+  ) {
     throw createError("Invalid refresh token", 401);
   }
 
-  // Find valid session
   const session = await Session.findOne({
     _id: sessionId,
     user: sub,
@@ -491,7 +527,6 @@ const refreshAccessToken = async (refreshToken) => {
     );
   }
 
-  // Check user status
   const user = await User.findById(sub);
 
   if (
@@ -551,8 +586,7 @@ const refreshAccessToken = async (refreshToken) => {
   };
 };
 
-
-// Logout User
+// 8. Logout User
 const logoutUser = async (sessionId) => {
   const session = await Session.findOneAndUpdate(
     {
@@ -579,46 +613,7 @@ const logoutUser = async (sessionId) => {
   return true;
 };
 
-
-  // Create session
-  const session = await Session.create({
-    user: user._id,
-    refreshTokenHash: "temporary",
-    expiresAt: new Date(
-      Date.now() + 7 * 24 * 60 * 60 * 1000
-    ),
-    userAgent: metadata.userAgent || null,
-    ipAddress: metadata.ipAddress || null,
-  });
-
-  // Generate tokens
-  const accessToken = generateAccessToken(
-    user,
-    session._id
-  );
-
-  const refreshToken = generateRefreshToken(
-    user,
-    session._id
-  );
-
-  // Store hashed refresh token
-  session.refreshTokenHash = hashToken(refreshToken);
-
-  await session.save();
-
-  // Update last login
-  user.lastLoginAt = new Date();
-
-  await user.save();
-
-  return {
-    user: sanitizeUser(user),
-    accessToken,
-    refreshToken,
-  };
-};
-
+// Export Services
 export {
   initialSetup,
   registerUser,
@@ -628,4 +623,5 @@ export {
   loginUser,
   refreshAccessToken,
   logoutUser,
+  sanitizeUser,
 };
