@@ -1,12 +1,13 @@
 "use client";
 
 import { useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 
 import useAuth from "@/features/auth/hooks/use-auth";
 
 const AuthGuard = ({ children }) => {
   const router = useRouter();
+  const pathname = usePathname();
 
   const {
     isAuthenticated,
@@ -16,20 +17,22 @@ const AuthGuard = ({ children }) => {
 
   useEffect(() => {
     if (isInitialized && !isLoading && !isAuthenticated) {
-      router.replace("/login");
+      const redirectUrl = `/login?next=${encodeURIComponent(pathname)}`;
+
+      router.replace(redirectUrl);
     }
   }, [
     isInitialized,
     isLoading,
     isAuthenticated,
+    pathname,
     router,
   ]);
 
-  // Wait until initial authentication check completes
   if (!isInitialized || isLoading || !isAuthenticated) {
     return (
-      <div className="flex min-h-screen items-center justify-center">
-        <p className="text-sm text-gray-500">
+      <div className="flex min-h-screen items-center justify-center bg-slate-50">
+        <p className="text-sm text-slate-500">
           Checking authentication...
         </p>
       </div>
