@@ -5,14 +5,15 @@ import { env } from "./config/env.js";
 
 const startServer = async () => {
   try {
-    // Connect to MongoDB first
+    // Connect to MongoDB before starting the server
     await connectDB();
 
-    // Start Express server
-    app.listen(env.PORT, () => {
-      console.log(`Server running on port ${env.PORT}`);
+    // Use Render's assigned port in production
+    const PORT = process.env.PORT || env.PORT;
+
+    app.listen(PORT, "0.0.0.0", () => {
+      console.log(`Server running on port ${PORT}`);
       console.log(`Environment: ${env.NODE_ENV}`);
-      console.log(`API URL: http://localhost:${env.PORT}/api`);
     });
   } catch (error) {
     console.error("Server startup failed:", error);

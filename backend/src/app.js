@@ -2,12 +2,11 @@
 import express from "express";
 import cors from "cors";
 import cookieParser from "cookie-parser";
-import apiRoutes from "./routes/index.js";
 
+import apiRoutes from "./routes/index.js";
 import { env } from "./config/env.js";
 
 const app = express();
-
 
 // CORS configuration
 app.use(
@@ -21,7 +20,6 @@ app.use(
 app.use(express.json({ limit: "1mb" }));
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
-app.use("/api", apiRoutes);
 
 // Health check
 app.get("/api/health", (req, res) => {
@@ -31,5 +29,8 @@ app.get("/api/health", (req, res) => {
     environment: env.NODE_ENV,
   });
 });
+
+// API routes
+app.use("/api", apiRoutes);
 
 export default app;

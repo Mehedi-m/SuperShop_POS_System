@@ -1,3 +1,4 @@
+
 import { env } from "../config/env.js";
 
 export const refreshCookieOptions = {
@@ -5,7 +6,7 @@ export const refreshCookieOptions = {
 
   secure: env.NODE_ENV === "production",
 
-  sameSite: "lax",
+  sameSite: env.NODE_ENV === "production" ? "none" : "lax",
 
   path: "/api/auth",
 
