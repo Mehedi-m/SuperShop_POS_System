@@ -21,6 +21,13 @@ app.use(express.json({ limit: "1mb" }));
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 
+app.get("/", (req, res) => {
+  res.status(200).json({
+    success: true,
+    message: "Supershop POS API is running!",
+  });
+});
+
 // Health check
 app.get("/api/health", (req, res) => {
   res.status(200).json({
@@ -31,6 +38,7 @@ app.get("/api/health", (req, res) => {
 });
 
 // API routes
+
 app.use("/api", apiRoutes);
 app.use("/api/notifications", notificationRoutes);
 
