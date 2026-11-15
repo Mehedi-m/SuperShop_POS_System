@@ -102,6 +102,7 @@ export const loginSchema = z.object({
 
 
 // Approve User Validation
+
 export const approveUserSchema = z.object({
   body: z
     .object({
@@ -133,19 +134,20 @@ export const approveUserSchema = z.object({
     )
     .refine(
       (data) =>
-        data.role !== "cashier" || Boolean(data.counterId),
+        ["manager", "inventory_manager"].includes(data.role) ||
+        !data.branchId,
       {
-        message: "Counter ID is required for a cashier",
-        path: ["counterId"],
+        message:
+          "Branch ID is only allowed for manager and inventory manager",
+        path: ["branchId"],
       }
     )
     .refine(
       (data) =>
-        ["manager", "inventory_manager"].includes(data.role) ||
-        !data.branchId,
+        data.role !== "cashier" || Boolean(data.counterId),
       {
-        message: "Branch ID is not allowed for this role",
-        path: ["branchId"],
+        message: "Counter ID is required for a cashier",
+        path: ["counterId"],
       }
     )
     .refine(

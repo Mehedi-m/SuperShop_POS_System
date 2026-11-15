@@ -174,7 +174,7 @@ const getPendingUsers = async () => {
   return users;
 };
 
-// 4. Approve User and Assign Role
+
 // 4. Approve User and Assign Role
 const approveUser = async (
   userId,
@@ -185,7 +185,8 @@ const approveUser = async (
     throw createError("Invalid user ID", 400);
   }
 
-  // Admin does not need a branch or counter assignment.
+  // ADMIN APPROVAL
+  // Admin does not require branch or counter assignment
   if (role === "admin") {
     const user = await User.findById(userId);
 
@@ -197,6 +198,13 @@ const approveUser = async (
       throw createError(
         "This user is not pending approval",
         400
+      );
+    }
+
+    if (user.assignedBranch || user.assignedCounter) {
+      throw createError(
+        "This user already has an assignment",
+        409
       );
     }
 
@@ -212,14 +220,9 @@ const approveUser = async (
     return sanitizeUser(user);
   }
 
-  const isBranchRole = [
-    "manager",
-    "inventory_manager",
-  ].includes(role);
-
-  const assignmentId = isBranchRole
-    ? branchId
-    : counterId;
+  // Determine assignment ID
+  const assignmentId =
+    role === "cashier" ? counterId : branchId;
 
   if (!mongoose.isValidObjectId(assignmentId)) {
     throw createError(
@@ -234,9 +237,7 @@ const approveUser = async (
 
   try {
     await session.withTransaction(async () => {
-      const user = await User.findById(userId).session(
-        session
-      );
+      const user = await User.findById(userId).session(session);
 
       if (!user) {
         throw createError("User not found", 404);
@@ -256,8 +257,11 @@ const approveUser = async (
         );
       }
 
-      // MANAGER / INVENTORY MANAGER
-      if (isBranchRole) {
+      // MANAGER AND INVENTORY MANAGER APPROVAL
+      if (
+        role === "manager" ||
+        role === "inventory_manager"
+      ) {
         const branch = await Branch.findById(
           assignmentId
         ).session(session);
@@ -273,9 +277,13 @@ const approveUser = async (
           );
         }
 
+        // Determine the assignment field
         const assignmentField =
-          role === "manager" ? "manager" : "inventoryManager";
+          role === "manager"
+            ? "manager"
+            : "inventoryManager";
 
+        // Atomically reserve the branch position
         const updatedBranch = await Branch.findOneAndUpdate(
           {
             _id: assignmentId,
@@ -295,7 +303,9 @@ const approveUser = async (
 
         if (!updatedBranch) {
           throw createError(
-            `This branch already has a ${role.replace("_", " ")}`,
+            role === "manager"
+              ? "This branch already has a manager"
+              : "This branch already has an inventory manager",
             409
           );
         }
@@ -305,7 +315,7 @@ const approveUser = async (
         user.assignedCounter = null;
       }
 
-      // CASHIER
+      // CASHIER APPROVAL
       if (role === "cashier") {
         const counter = await Counter.findById(
           assignmentId
@@ -322,6 +332,7 @@ const approveUser = async (
           );
         }
 
+        // Check parent branch
         const branch = await Branch.findById(
           counter.branch
         ).session(session);
@@ -333,6 +344,7 @@ const approveUser = async (
           );
         }
 
+        // Atomically reserve the counter
         const updatedCounter = await Counter.findOneAndUpdate(
           {
             _id: assignmentId,
@@ -362,6 +374,7 @@ const approveUser = async (
         user.assignedBranch = null;
       }
 
+      // Common approval information
       user.accountStatus = "approved";
       user.approvedBy = adminId;
       user.approvedAt = new Date();
@@ -385,6 +398,7 @@ const approveUser = async (
     await session.endSession();
   }
 };
+
 
 // 5. Reject User
 const rejectUser = async (userId) => {
@@ -629,7 +643,6 @@ const logoutUser = async (sessionId) => {
   return true;
 };
 
-// Export Services
 export {
   initialSetup,
   registerUser,
@@ -640,4 +653,5 @@ export {
   refreshAccessToken,
   logoutUser,
   sanitizeUser,
+  
 };
