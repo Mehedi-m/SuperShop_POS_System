@@ -1,5 +1,19 @@
 import axiosInstance from "@/lib/axios/axios";
 
+export const getEmployees = async (params = {}) => {
+  const response = await axiosInstance.get("/users", {
+    params,
+  });
+
+  return response.data.data;
+};
+
+export const getEmployeeById = async (userId) => {
+  const response = await axiosInstance.get(`/users/${userId}`);
+
+  return response.data.data;
+};
+
 // Get pending users
 export const getPendingUsers = async () => {
   const response = await axiosInstance.get(

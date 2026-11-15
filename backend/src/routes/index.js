@@ -1,6 +1,7 @@
 
 import { Router } from "express";
 
+
 import authRoutes from "./auth.routes.js";
 import branchRoutes from "./branch.routes.js";
 import counterRoutes from "./counter.routes.js";

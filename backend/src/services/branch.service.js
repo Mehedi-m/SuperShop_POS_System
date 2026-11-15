@@ -2,6 +2,11 @@
 import mongoose from "mongoose";
 import Branch from "../models/branch.model.js";
 import Counter from "../models/counter.model.js";
+import {
+  notifyBranchCreated,
+  notifyBranchUpdated,
+  notifyBranchStatusChanged,
+} from "./notification-event.service.js";
 
 export const getAllBranches = async () => {
   return await Branch.find()

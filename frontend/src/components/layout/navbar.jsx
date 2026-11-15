@@ -3,7 +3,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-
+import NotificationDropdown from "@/features/notifications/components/notification-dropdown";
 import useBranchContext from "@/features/branches/hooks/use-branch-context";
 import useAuth from "@/features/auth/hooks/use-auth";
 
@@ -257,16 +257,7 @@ const Navbar = ({
         )}
 
         {/* Notifications */}
-        <button
-          type="button"
-          aria-label="Notifications"
-          title="Notifications"
-          className="relative flex h-10 w-10 items-center justify-center rounded-lg text-slate-500 transition hover:bg-slate-100 hover:text-slate-900"
-        >
-          <Bell size={19} strokeWidth={1.8} />
-
-          <span className="absolute right-2 top-2 h-2 w-2 rounded-full border-2 border-white bg-emerald-600" />
-        </button>
+<NotificationDropdown />
 
         <div className="hidden h-8 w-px bg-slate-200 sm:block" />
 

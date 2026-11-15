@@ -5,7 +5,7 @@ import cookieParser from "cookie-parser";
 
 import apiRoutes from "./routes/index.js";
 import { env } from "./config/env.js";
-
+import notificationRoutes from "./routes/notification.routes.js";
 const app = express();
 
 // CORS configuration
@@ -32,5 +32,6 @@ app.get("/api/health", (req, res) => {
 
 // API routes
 app.use("/api", apiRoutes);
+app.use("/api/notifications", notificationRoutes);
 
 export default app;

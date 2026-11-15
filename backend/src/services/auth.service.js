@@ -2,7 +2,6 @@
 import bcrypt from "bcryptjs";
 import mongoose from "mongoose";
 import jwt from "jsonwebtoken";
-
 import User from "../models/user.model.js";
 import Business from "../models/business.model.js";
 import Session from "../models/session.model.js";
@@ -16,6 +15,12 @@ import {
   generateRefreshToken,
   hashToken,
 } from "../utils/token.js";
+
+import {
+  notifyAdminsAboutRegistration,
+  notifyEmployeeAboutApproval,
+  notifyEmployeeAboutRejection,
+} from "./notification-event.service.js";
 
 // Reusable error helper
 const createError = (message, statusCode) => {
@@ -159,7 +164,7 @@ const registerUser = async (data) => {
     accountStatus: "pending",
     isActive: true,
   });
-
+  await notifyAdminsAboutRegistration(user);
   return sanitizeUser(user);
 };
 
@@ -215,9 +220,11 @@ const approveUser = async (
     user.approvedBy = adminId;
     user.approvedAt = new Date();
 
-    await user.save();
+await user.save();
 
-    return sanitizeUser(user);
+await notifyEmployeeAboutApproval(user);
+
+return sanitizeUser(user);
   }
 
   // Determine assignment ID
@@ -384,7 +391,9 @@ const approveUser = async (
       approvedUser = user;
     });
 
-    return sanitizeUser(approvedUser);
+await notifyEmployeeAboutApproval(approvedUser);
+
+return sanitizeUser(approvedUser);
   } catch (error) {
     if (error.code === 11000) {
       throw createError(
@@ -419,11 +428,13 @@ const rejectUser = async (userId) => {
     );
   }
 
-  user.accountStatus = "rejected";
+user.accountStatus = "rejected";
 
-  await user.save();
+await user.save();
 
-  return sanitizeUser(user);
+await notifyEmployeeAboutRejection(user);
+
+return sanitizeUser(user);
 };
 
 // 6. Login User
@@ -653,5 +664,5 @@ export {
   refreshAccessToken,
   logoutUser,
   sanitizeUser,
-  
+
 };
